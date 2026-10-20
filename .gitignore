@@ -1,0 +1,15 @@
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.settings
+.project
+.classpath
+
+installers/*
+keycloak-26.7.1/*
+shibboleth-sp/*
+keycloak-certs/
+temp/
+openssl-4.0.1/

@@ -1,0 +1,10 @@
+Enable IIS:
+
+1. Win + R
+2. type optionalfeatures
+3. Check Internet Information Services
+4. CMD: >sc query W3SVC
+
+Download Shibboleth SP:
+https://shibboleth.net/downloads/service-provider/latest/win64/?utm_source=chatgpt.com
+

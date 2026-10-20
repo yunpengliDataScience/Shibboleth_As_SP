@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Spring Boot + Shibboleth Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 850px; margin: 50px auto; line-height: 1.5; }
+        code { background: #f3f3f3; padding: 2px 5px; }
+    </style>
+</head>
+<body>
+    <h1>Spring Boot behind IIS + Shibboleth</h1>
+    <p>Spring Boot does not process SAML. Keycloak authenticates through Shibboleth SP.</p>
+
+    <p th:if="${uid != null}">Authenticated uid: <strong th:text="${uid}">user</strong></p>
+    <p th:if="${uid == null}">Authenticated uid: <strong>not received yet</strong></p>
+
+    <p><a href="/user">Show identity diagnostic JSON</a></p>
+</body>
+</html>

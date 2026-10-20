@@ -1,0 +1,26 @@
+server:
+  port: 9092
+  ssl:
+    key-store: classpath:certs/springboot.p12
+    key-store-type: PKCS12
+    key-store-password: springbootpass
+    key-alias: springboot
+spring:
+  application:
+    name: SpringBoot_SAML_App2
+  security:
+    saml2:
+      relyingparty:
+        registration:
+          keycloak:
+            # Entity ID by which Keycloak knows this Spring Boot Service Provider. It should match the client ID in keycloak
+            entity-id: SpringBoot_SAML_App2
+            assertingparty:
+              # Keycloak publishes its SAML IdP entity ID, SSO endpoints, bindings,
+              # and signing certificate through this metadata document. It should match the SAML endpoint of keycloak's realm
+              metadata-uri: https://localhost:9991/realms/MySecurityRealm/protocol/saml/descriptor
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.springframework.security.saml2: DEBUG

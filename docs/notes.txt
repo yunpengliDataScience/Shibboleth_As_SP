@@ -6,5 +6,5 @@ Enable IIS:
 4. CMD: >sc query W3SVC
 
 Download Shibboleth SP:
-https://shibboleth.net/downloads/service-provider/latest/win64/?utm_source=chatgpt.com
+https://shibboleth.net/downloads/service-provider/latest/win64/
 

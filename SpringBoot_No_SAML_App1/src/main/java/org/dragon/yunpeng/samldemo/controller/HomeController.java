@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,7 +18,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class HomeController {
 
 	@GetMapping("/")
-	public String home(HttpServletRequest request, Model model) {
+	public String home(HttpServletRequest request, Model model, Authentication authentication) {
 
 		String uid = request.getHeader("uid");
 
@@ -25,13 +27,15 @@ public class HomeController {
 		}
 
 		model.addAttribute("uid", uid);
+		model.addAttribute("username", authentication.getName());
+		model.addAttribute("authorities", authentication.getAuthorities());
 
 		return "home";
 	}
 
 	@GetMapping("/user")
 	@ResponseBody
-	public Map<String, Object> user(HttpServletRequest request) {
+	public Map<String, Object> user(HttpServletRequest request, Authentication authentication) {
 
 		Map<String, Object> result = new LinkedHashMap<>();
 
@@ -45,6 +49,9 @@ public class HomeController {
 			result.put(headerName, values);
 		}
 
+		result.put("username", authentication.getName());
+
 		return result;
 	}
+
 }

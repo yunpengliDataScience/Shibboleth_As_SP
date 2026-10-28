@@ -14,6 +14,9 @@
 
     <p th:if="${uid != null}">Authenticated uid: <strong th:text="${uid}">user</strong></p>
     <p th:if="${uid == null}">Authenticated uid: <strong>not received yet</strong></p>
+    
+    <p>User: <strong th:text="${username}">username</strong></p>
+	<p>Authorities: <strong th:text="${authorities}">authorities</strong></p>
 
     <p><a href="/user">Show identity diagnostic JSON</a></p>
 </body>

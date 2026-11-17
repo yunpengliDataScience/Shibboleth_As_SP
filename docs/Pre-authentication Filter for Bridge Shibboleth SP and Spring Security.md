@@ -331,8 +331,6 @@ Your security boundary therefore needs to remain:
 
 One additional improvement I'd make for production is to use Spring Security's **pre-authentication support** rather than maintaining a completely custom authentication mechanism. The architecture remains the same—Shibboleth authenticates, Spring trusts the upstream identity—but Spring's `PreAuthenticatedAuthenticationProvider` can handle the integration more formally. For your current demo, however, the filter above is much easier to understand and demonstrates exactly how the pieces fit together.
 
-
-
 --------------
 
 If you want to use **Spring Security for authorization**, then yes, you generally want the authenticated Shibboleth user represented in Spring's `SecurityContext`.
@@ -475,8 +473,6 @@ So the distinction is:
 For **your architecture**, if you want Spring to handle application security/authorization, I recommend using Spring Security's **pre-authentication mechanism** and letting Spring manage the `SecurityContext` rather than manually setting it.
 
 If you'd like, I can give you the **proper `PreAuthenticatedAuthenticationProvider` configuration for Shibboleth + `uid` header**, replacing the simplified filter I gave above.
-
-
 
 -----------
 

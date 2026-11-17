@@ -48,6 +48,7 @@ public class SecurityConfig {
 		return new ProviderManager(provider);
 	}
 
+	// Use a RequestHeaderAuthenticationFilter to extract the Shibboleth header
 	@Bean
 	RequestHeaderAuthenticationFilter shibbolethAuthenticationFilter(AuthenticationManager manager) {
 
@@ -61,13 +62,13 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	SecurityFilterChain securityFilterChain(HttpSecurity http, RequestHeaderAuthenticationFilter filter)
-			throws Exception {
+	SecurityFilterChain securityFilterChain(HttpSecurity http,
+			RequestHeaderAuthenticationFilter shibbolethAuthenticationFilter) throws Exception {
 
 		http.authorizeHttpRequests(
 				auth -> auth.requestMatchers("/css/**", "/js/**", "/images/**").permitAll().anyRequest().authenticated()
 		// .requestMatchers("/admin/**").hasRole("ADMIN").anyRequest().authenticated()
-		).addFilterBefore(filter, AnonymousAuthenticationFilter.class)
+		).addFilterBefore(shibbolethAuthenticationFilter, AnonymousAuthenticationFilter.class) //add the filter to the filter chain
 				.exceptionHandling(ex -> ex.authenticationEntryPoint(new Http403ForbiddenEntryPoint()));
 
 		return http.build();

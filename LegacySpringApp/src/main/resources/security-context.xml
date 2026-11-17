@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:security="http://www.springframework.org/schema/security"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
+
+	<bean id="preAuthUserDetailsService"
+		class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
+		<property name="userDetailsService" ref="myUserDetailsService" />
+	</bean>
+
+	<bean id="preAuthProvider"
+		class="org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider">
+		<property name="preAuthenticatedUserDetailsService"
+			ref="preAuthUserDetailsService" />
+	</bean>
+
+	<security:authentication-manager alias="authenticationManager">
+		<security:authentication-provider ref="preAuthProvider" />
+	</security:authentication-manager>
+
+	<bean id="shibbolethHeaderFilter"
+		class="org.springframework.security.web.authentication.preauth.RequestHeaderAuthenticationFilter">
+		<property name="principalRequestHeader" value="uid" />
+		<property name="exceptionIfHeaderMissing" value="false" />
+		<property name="authenticationManager" ref="authenticationManager" />
+	</bean>
+
+	<bean id="forbiddenEntryPoint"
+		class="org.springframework.security.web.authentication.Http403ForbiddenEntryPoint" />
+
+	<security:http use-expressions="true" entry-point-ref="forbiddenEntryPoint"
+		create-session="stateless">
+		<security:intercept-url pattern="/access-denied" access="permitAll" />
+		<security:intercept-url pattern="/admin/**" access="hasRole('ADMIN')" />
+		<security:intercept-url pattern="/admin" access="hasRole('ADMIN')" />
+		<security:intercept-url pattern="/**" access="isAuthenticated()" />
+		<security:custom-filter ref="shibbolethHeaderFilter"
+			position="PRE_AUTH_FILTER" />
+		<security:access-denied-handler error-page="/access-denied" />
+	</security:http>
+
+</beans>

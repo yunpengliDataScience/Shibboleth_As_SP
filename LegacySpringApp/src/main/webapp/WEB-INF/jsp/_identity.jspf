@@ -1,0 +1,11 @@
+<%@ taglib prefix="sec" uri="http://www.springframework.org/security/tags" %>
+
+<div style="background:#eef4ff;border:1px solid #ccd8ee;padding:12px;margin:12px 0;">
+  
+  <strong>Signed in as:</strong> <sec:authentication property="name" />
+  <span style="margin-left:18px;"><strong>Roles:</strong>
+    <sec:authorize access="hasRole('ADMIN')">Administrator</sec:authorize>
+    <sec:authorize access="!hasRole('ADMIN')">Regular user</sec:authorize>
+  </span>
+
+</div>

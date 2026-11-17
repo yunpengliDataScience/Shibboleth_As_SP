@@ -1,0 +1,3 @@
+CREATE TABLE IF NOT EXISTS app_users (username VARCHAR(100) PRIMARY KEY, enabled BOOLEAN NOT NULL);
+
+CREATE TABLE IF NOT EXISTS app_roles (id BIGINT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(100) NOT NULL, authority VARCHAR(100) NOT NULL, CONSTRAINT uq_app_roles UNIQUE(username,authority), CONSTRAINT fk_app_roles FOREIGN KEY(username) REFERENCES app_users(username));

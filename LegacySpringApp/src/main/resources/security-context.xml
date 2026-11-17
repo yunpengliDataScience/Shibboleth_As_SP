@@ -1,44 +1,166 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns:security="http://www.springframework.org/schema/security"
-	xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
-						http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/security https://www.springframework.org/schema/security/spring-security.xsd">
 
-	<bean id="preAuthUserDetailsService"
-		class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
-		<property name="userDetailsService" ref="myUserDetailsService" />
-	</bean>
+    <!--
+      PURPOSE AND TRUST BOUNDARY
+      ==========================
+      This application does not perform SAML login itself. Shibboleth SP, integrated
+      with IIS, authenticates the browser against the configured SAML identity provider.
+      IIS/ARR then forwards the authenticated request to this Spring application.
 
-	<bean id="preAuthProvider"
-		class="org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider">
-		<property name="preAuthenticatedUserDetailsService"
-			ref="preAuthUserDetailsService" />
-	</bean>
+      Expected request flow:
+        Browser -> IIS/Shibboleth SP -> ARR -> Spring Security -> MVC controller/JSP
 
-	<security:authentication-manager alias="authenticationManager">
-		<security:authentication-provider ref="preAuthProvider" />
-	</security:authentication-manager>
+      The application expects a trusted HTTP request header such as:
+        uid: yunpeng.li
 
-	<bean id="shibbolethHeaderFilter"
-		class="org.springframework.security.web.authentication.preauth.RequestHeaderAuthenticationFilter">
-		<property name="principalRequestHeader" value="uid" />
-		<property name="exceptionIfHeaderMissing" value="false" />
-		<property name="authenticationManager" ref="authenticationManager" />
-	</bean>
+      SECURITY: A client can forge an HTTP header if it can reach Tomcat directly.
+      Restrict Tomcat to trusted proxy traffic, and ensure the proxy removes any
+      incoming client-supplied uid header and sets its own authenticated value.
+      These XML beans do NOT establish that proxy trust boundary by themselves.
+    -->
 
-	<bean id="forbiddenEntryPoint"
-		class="org.springframework.security.web.authentication.Http403ForbiddenEntryPoint" />
+    <!--
+      STEP 1: ADAPT OUR UserDetailsService TO THE PRE-AUTHENTICATION API
+      =============================================
+      The bean named myUserDetailsService must exist in another imported Spring
+      context and implement org.springframework.security.core.userdetails.UserDetailsService.
 
-	<security:http use-expressions="true" entry-point-ref="forbiddenEntryPoint"
-		create-session="stateless">
-		<security:intercept-url pattern="/access-denied" access="permitAll" />
-		<security:intercept-url pattern="/admin/**" access="hasRole('ADMIN')" />
-		<security:intercept-url pattern="/admin" access="hasRole('ADMIN')" />
-		<security:intercept-url pattern="/**" access="isAuthenticated()" />
-		<security:custom-filter ref="shibbolethHeaderFilter"
-			position="PRE_AUTH_FILTER" />
-		<security:access-denied-handler error-page="/access-denied" />
-	</security:http>
+      The wrapper implements AuthenticationUserDetailsService for pre-auth tokens.
+      During authentication, its loadUserDetails(token) method calls:
+          myUserDetailsService.loadUserByUsername(token.getName())
+
+      In our application, that custom service uses Hibernate/JPA to find the user
+      and assigned authorities (for example ROLE_USER and ROLE_ADMIN) in H2.
+      It is NOT checking a password: Shibboleth already authenticated the identity.
+    -->
+    <bean id="preAuthUserDetailsService"
+          class="org.springframework.security.core.userdetails.UserDetailsByNameServiceWrapper">
+        <property name="userDetailsService" ref="myUserDetailsService" />
+    </bean>
+
+    <!--
+      STEP 2: TURN A PRE-AUTHENTICATED IDENTITY INTO A SPRING AUTHENTICATION
+      =============================================
+      This provider accepts a PreAuthenticatedAuthenticationToken produced by
+      the request-header filter below. It asks preAuthUserDetailsService to load
+      UserDetails, including GrantedAuthority values from the H2 database.
+
+      On success it returns an authenticated token with the loaded UserDetails
+      principal and authorities. A missing/disabled user or failed role lookup
+      should prevent successful authentication.
+    -->
+    <bean id="preAuthProvider"
+          class="org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider">
+        <property name="preAuthenticatedUserDetailsService"
+                  ref="preAuthUserDetailsService" />
+    </bean>
+
+    <!--
+      STEP 3: REGISTER THE AUTHENTICATION MANAGER
+      =============================================
+      AuthenticationManager (normally a ProviderManager) delegates the pre-auth
+      token to preAuthProvider. The alias authenticationManager is used by the
+      request-header filter below.
+
+      Call path:
+        shibbolethHeaderFilter
+          -> authenticationManager.authenticate(token)
+          -> preAuthProvider
+          -> preAuthUserDetailsService.loadUserDetails(token)
+          -> myUserDetailsService.loadUserByUsername(username)
+    -->
+    <security:authentication-manager alias="authenticationManager">
+        <security:authentication-provider ref="preAuthProvider" />
+    </security:authentication-manager>
+
+    <!--
+      STEP 4: READ THE SHIBBOLETH-PROVIDED USERNAME FROM THE HTTP REQUEST
+      =============================================
+      RequestHeaderAuthenticationFilter is a Spring Security built-in filter.
+      Its principalRequestHeader property makes it read request.getHeader("uid").
+
+      Example: uid: yunpeng.li
+        -> creates a PreAuthenticatedAuthenticationToken for yunpeng.li
+        -> sends the token to authenticationManager
+        -> receives an authenticated token containing roles from H2
+        -> places that Authentication in SecurityContextHolder
+
+      Controllers can use Authentication.getName(); JSPs can display the username
+      using <sec:authentication property="name" /> (with the JSP security taglib).
+
+      CURRENT BEHAVIOR: exceptionIfHeaderMissing=false means a missing uid header
+      does not immediately throw from this filter. It does NOT grant anonymous
+      access to the protected URL rules below. In a strictly proxied production
+      deployment, consider true to fail explicitly when the header is missing.
+    -->
+    <bean id="shibbolethHeaderFilter"
+          class="org.springframework.security.web.authentication.preauth.RequestHeaderAuthenticationFilter">
+        <property name="principalRequestHeader" value="uid" />
+        <property name="exceptionIfHeaderMissing" value="false" />
+        <property name="authenticationManager" ref="authenticationManager" />
+    </bean>
+
+    <!--
+      STEP 5: RESPONSE WHEN AUTHENTICATION IS REQUIRED BUT NOT AVAILABLE
+      =============================================
+      Http403ForbiddenEntryPoint sends HTTP 403 instead of redirecting to a
+      Spring login form. That is intentional: this app delegates login to
+      Shibboleth, and the proxy should enforce the Shibboleth session upstream.
+
+      Distinguish this entry point from the access-denied handler below:
+      the entry point handles unauthenticated access; the access-denied handler
+      handles authenticated users lacking a required role.
+    -->
+    <bean id="forbiddenEntryPoint"
+          class="org.springframework.security.web.authentication.Http403ForbiddenEntryPoint" />
+
+    <!--
+      STEP 6: AUTHORIZE REQUESTS AND INSTALL THE PRE-AUTH FILTER
+      =============================================
+      use-expressions=true enables expressions such as hasRole and isAuthenticated.
+      URL rules are evaluated in order, so specific paths precede the /** rule.
+
+      create-session=stateless tells Spring Security not to create/use an HTTP
+      session for its SecurityContext. Each request must therefore be authenticated
+      from the trusted header again. This is separate from the Shibboleth session
+      maintained at IIS. Other application components could still create sessions.
+
+      The filter is inserted at Spring Security's PRE_AUTH_FILTER position.
+      Defining this XML chain does not alone register DelegatingFilterProxy in
+      the servlet container; embedded Tomcat must have that registration too.
+    -->
+    <security:http use-expressions="true"
+                   entry-point-ref="forbiddenEntryPoint"
+                   create-session="stateless">
+
+        <!-- Allow the access-denied view to render without an authorization loop. -->
+        <security:intercept-url pattern="/access-denied" access="permitAll" />
+
+        <!--
+          Require ROLE_ADMIN for nested admin URLs and the exact /admin URL.
+          hasRole('ADMIN') checks for authority ROLE_ADMIN by default.
+          Example: yunpeng.li and luan.vu are admins; jane.doe is not.
+        -->
+        <security:intercept-url pattern="/admin/**" access="hasRole('ADMIN')" />
+        <security:intercept-url pattern="/admin" access="hasRole('ADMIN')" />
+
+        <!-- All other URLs require an authenticated user, regardless of role. -->
+        <security:intercept-url pattern="/**" access="isAuthenticated()" />
+
+        <!-- Execute the header-based pre-authentication filter on requests. -->
+        <security:custom-filter ref="shibbolethHeaderFilter"
+                                position="PRE_AUTH_FILTER" />
+
+        <!--
+          When an authenticated user lacks permission, dispatch to this page.
+          The URL is permitted above to avoid an access-denied redirect loop.
+        -->
+        <security:access-denied-handler error-page="/access-denied" />
+    </security:http>
 
 </beans>

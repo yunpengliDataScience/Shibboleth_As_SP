@@ -1,64 +1,170 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    LegacySpringApp: application-level Spring configuration.
+
+    This file wires together MVC controller discovery, transaction support,
+    the persistent H2 database, database initialization, Hibernate/JPA,
+    and the application's custom UserDetailsService.
+
+    Shibboleth SAML authentication and HTTP-header pre-authentication are
+    configured separately in security-context.xml.
+-->
 <beans xmlns="http://www.springframework.org/schema/beans"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns:context="http://www.springframework.org/schema/context"
-	xmlns:tx="http://www.springframework.org/schema/tx"
-	xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
-						http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd
-						http://www.springframework.org/schema/tx https://www.springframework.org/schema/tx/spring-tx.xsd">
-	
-	<context:component-scan base-package="org.dragon.yunpeng.legacy.controller" />
-	
-	<tx:annotation-driven transaction-manager="transactionManager" />
-	
-	<bean id="dataSource"
-		class="org.springframework.jdbc.datasource.DriverManagerDataSource">
-		<property name="driverClassName" value="org.h2.Driver" />
-		<property name="url"
-			value="jdbc:h2:file:./data/legacy-spring-db;DB_CLOSE_ON_EXIT=FALSE" />
-		<property name="username" value="sa" />
-		<property name="password" value="" />
-	</bean>
-	
-	<bean id="dbInitializer"
-		class="org.springframework.jdbc.datasource.init.DataSourceInitializer">
-		<property name="dataSource" ref="dataSource" />
-		<property name="databasePopulator">
-			<bean
-				class="org.springframework.jdbc.datasource.init.ResourceDatabasePopulator">
-				<property name="scripts">
-					<list>
-						<value>classpath:db/schema.sql</value>
-						<value>classpath:db/seed.sql</value>
-					</list>
-				</property>
-			</bean>
-		</property>
-	</bean>
-	
-	<bean id="entityManagerFactory"
-		class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean"
-		depends-on="dbInitializer">
-		<property name="dataSource" ref="dataSource" />
-		<property name="packagesToScan" value="org.dragon.yunpeng.legacy.model" />
-		<property name="jpaVendorAdapter">
-			<bean
-				class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter" />
-		</property>
-		<property name="jpaProperties">
-			<props>
-				<prop key="hibernate.dialect">org.hibernate.dialect.H2Dialect</prop>
-				<prop key="hibernate.hbm2ddl.auto">none</prop>
-			</props>
-		</property>
-	</bean>
-	
-	<bean id="transactionManager"
-		class="org.springframework.orm.jpa.JpaTransactionManager">
-		<property name="entityManagerFactory" ref="entityManagerFactory" />
-	</bean>
-	
-	<bean id="myUserDetailsService"
-		class="org.dragon.yunpeng.legacy.security.MyUserDetailsService" />
-		
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xmlns:tx="http://www.springframework.org/schema/tx"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+                        http://www.springframework.org/schema/context https://www.springframework.org/schema/context/spring-context.xsd
+                        http://www.springframework.org/schema/tx https://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <!--
+        Discover Spring components in the controller package, such as classes
+        annotated with @Controller. This enables Spring to instantiate those
+        controllers and inject their dependencies.
+
+        Only this package is scanned by this declaration. Other beans below
+        (such as myUserDetailsService) are explicitly registered in XML.
+    -->
+    <context:component-scan base-package="org.dragon.yunpeng.legacy.controller" />
+
+    <!--
+        Enable interception of methods annotated with @Transactional, using
+        the JpaTransactionManager defined later in this file. For example,
+        MyUserDetailsService.loadUserByUsername() can perform a read-only
+        Hibernate/JPA query within a transaction.
+
+        IMPORTANT: enable annotation-driven transactions only ONCE. If Spring
+        Boot or another configuration also enables @EnableTransactionManagement,
+        duplicate internalTransactionAdvisor bean registration can occur.
+        Keep this XML declaration only if the other activation is disabled.
+    -->
+    <tx:annotation-driven transaction-manager="transactionManager" />
+
+    <!--
+        DataSource: describes how Spring connects to the embedded H2 database.
+
+        jdbc:h2:file:./data/legacy-spring-db stores the database on disk,
+        relative to the Java process's current working directory. The data
+        survives application restarts (unlike jdbc:h2:mem: databases).
+
+        DB_CLOSE_ON_EXIT=FALSE prevents H2 from closing the database through
+        its own JVM shutdown hook; the application should manage shutdown.
+
+        DriverManagerDataSource creates a new connection when requested; it is
+        simple for a demo but does NOT provide connection pooling.
+
+        The 'sa' user with a blank password is for local demonstration only.
+        Use protected database credentials and file permissions in production.
+    -->
+    <bean id="dataSource"
+        class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="org.h2.Driver" />
+        <property name="url"
+            value="jdbc:h2:file:./data/legacy-spring-db;DB_CLOSE_ON_EXIT=FALSE" />
+        <property name="username" value="sa" />
+        <property name="password" value="" />
+    </bean>
+
+    <!--
+        Database initializer: runs SQL resources against the DataSource during
+        application startup. The scripts are executed in the order listed:
+
+          1. db/schema.sql - create/ensure tables and other schema objects.
+          2. db/seed.sql   - insert initial users and their role assignments.
+
+        The three demonstration users are intended to be:
+          yunpeng.li -> ROLE_USER, ROLE_ADMIN
+          luan.vu    -> ROLE_USER, ROLE_ADMIN
+          jane.doe   -> ROLE_USER
+
+        The SQL scripts themselves must be idempotent (for example, using
+        CREATE TABLE IF NOT EXISTS and conditional INSERT statements), because
+        this initializer runs on each startup. This XML does not itself prevent
+        duplicate inserts or preserve changed role assignments.
+
+        If a script fails, startup may fail. See the underlying SQL exception
+        for details.
+    -->
+    <bean id="dbInitializer"
+        class="org.springframework.jdbc.datasource.init.DataSourceInitializer">
+        <property name="dataSource" ref="dataSource" />
+        <property name="databasePopulator">
+            <bean
+                class="org.springframework.jdbc.datasource.init.ResourceDatabasePopulator">
+                <property name="scripts">
+                    <list>
+                        <value>classpath:db/schema.sql</value>
+                        <value>classpath:db/seed.sql</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <!--
+        EntityManagerFactory: creates JPA EntityManager instances backed by
+        Hibernate, using the H2 DataSource above.
+
+        depends-on="dbInitializer" ensures schema.sql and seed.sql finish
+        before Hibernate initializes its EntityManagerFactory.
+
+        packagesToScan locates JPA entity classes (for example, AppUser and
+        AppRole) in org.dragon.yunpeng.legacy.model.
+
+        HibernateJpaVendorAdapter selects Hibernate as the JPA provider.
+        hibernate.dialect tells Hibernate to generate H2-compatible SQL.
+        hibernate.hbm2ddl.auto=none means Hibernate will NOT create or update
+        database tables; schema.sql is responsible for that work.
+    -->
+    <bean id="entityManagerFactory"
+        class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean"
+        depends-on="dbInitializer">
+        <property name="dataSource" ref="dataSource" />
+        <property name="packagesToScan" value="org.dragon.yunpeng.legacy.model" />
+        <property name="jpaVendorAdapter">
+            <bean
+                class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter" />
+        </property>
+        <property name="jpaProperties">
+            <props>
+                <prop key="hibernate.dialect">org.hibernate.dialect.H2Dialect</prop>
+                <prop key="hibernate.hbm2ddl.auto">none</prop>
+            </props>
+        </property>
+    </bean>
+
+    <!--
+        JPA transaction manager: coordinates database transactions for methods
+        intercepted by <tx:annotation-driven>, including @Transactional methods.
+
+        It uses the EntityManagerFactory above, so JPA queries executed by
+        MyUserDetailsService participate in Spring-managed transactions.
+    -->
+    <bean id="transactionManager"
+        class="org.springframework.orm.jpa.JpaTransactionManager">
+        <property name="entityManagerFactory" ref="entityManagerFactory" />
+    </bean>
+
+    <!--
+        Custom Spring Security UserDetailsService implementation.
+
+        After IIS/Shibboleth authenticates a user, security-context.xml reads
+        the trusted 'uid' HTTP header using RequestHeaderAuthenticationFilter.
+        The PreAuthenticatedAuthenticationProvider then uses a
+        UserDetailsByNameServiceWrapper to call:
+
+            myUserDetailsService.loadUserByUsername(uid)
+
+        The service uses JPA/Hibernate to look up the user and roles in H2 and
+        returns a UserDetails containing GrantedAuthority values such as
+        ROLE_USER and ROLE_ADMIN. Spring Security uses those authorities to
+        authorize URLs such as /admin/**.
+
+        This service does NOT validate a password or perform SAML processing;
+        authentication has already been performed by Shibboleth. The 'uid'
+        header must come only from a trusted IIS/Shibboleth reverse proxy.
+    -->
+    <bean id="myUserDetailsService"
+        class="org.dragon.yunpeng.legacy.security.MyUserDetailsService" />
+
 </beans>

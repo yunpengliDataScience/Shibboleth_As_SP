@@ -24,7 +24,11 @@
             <!--
             <Site id="42" name="virtual.example.org" scheme="https" port="443"/>
             -->
+			
 			<Site id="2" name="localhost" scheme="http" port="8088"/>
+			
+			
+			<Site id="4" name="localhost" scheme="http" port="8089"/>
         </ISAPI>
     </InProcess>
 
